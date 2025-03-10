@@ -1,0 +1,12 @@
+*.pyc
+*.sh
+.vscode
+output
+dataset
+build
+depth-diff-gaussian-rasterization/diff_rast.egg-info
+depth-diff-gaussian-rasterization/dist
+tensorboard_3d
+screenshots
+output
+*__pycache__*
