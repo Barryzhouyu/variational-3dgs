@@ -2,10 +2,7 @@
 [Ruiqi Li](https://www.comp.hkbu.edu.hk/~csrqli/), [Yiu-ming Cheung](https://www.comp.hkbu.edu.hk/~ymc/) <br>
 [Paper Link](https://openreview.net/pdf?id=qpeAtfUWOQ) 
 
-This repository contains the official open-source implementation of the paper "Variational Multi-scale Representation for Estimating Uncertainty in 3D Gaussian Splatting". 
-
-Abstract: *Recently, 3D Gaussian Splatting (3DGS) has become popular in reconstructing dense 3D representations of appearance and geometry. However, the learning pipeline in 3DGS inherently lacks the ability to quantify uncertainty, which is an important factor in applications like robotics mapping and navigation. In this paper, we propose an uncertainty estimation method built upon the Bayesian inference framework. Specifically, we propose a method to build variational multi-scale 3D Gaussians, where we leverage explicit scale information in 3DGS parameters to construct diversified parameter space samples. We develop an offset table technique to draw local multi-scale samples efficiently by offsetting selected attributes and sharing other base attributes. Then, the offset table is learned by variational inference with multi-scale prior. The learned offset posterior can quantify the uncertainty of each individual Gaussian component, and be used in the forward pass to infer the predictive uncertainty. Extensive experimental results on various benchmark datasets show that the proposed method provides well-aligned calibration performance on estimated uncertainty and better rendering quality compared with the previous methods that enable uncertainty quantification with view synthesis. Besides, by leveraging the model parameter uncertainty estimated by our method, we can remove noisy Gaussians automatically, thereby obtaining a high-fidelity part of the reconstructed scene, which is of great help in improving the visual quality. *
-
+This repository contains the official open-source implementation of the paper "Variational Multi-scale Representation for Estimating Uncertainty in 3D Gaussian Splatting". We developed an uncertainty estimation method for Gaussian Splatting method based on Bayesian inference framework and multi-scale representation. 
 
 ## Citation
 If you found our work useful welcome to cite our paper: 
