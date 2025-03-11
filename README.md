@@ -1,6 +1,6 @@
 # Variational Multi-scale Representation for Estimating Uncertainty in 3D Gaussian Splatting
 [Ruiqi Li](https://www.comp.hkbu.edu.hk/~csrqli/), [Yiu-ming Cheung](https://www.comp.hkbu.edu.hk/~ymc/) <br>
-[Paper Link](https://openreview.net/pdf?id=qpeAtfUWOQ) 
+[Paper Link](https://proceedings.neurips.cc/paper_files/paper/2024/file/a076d0d1ed77364fc57693bdee1958fb-Paper-Conference.pdf) 
 
 This repository contains the official open-source implementation of the paper "Variational Multi-scale Representation for Estimating Uncertainty in 3D Gaussian Splatting". We developed an uncertainty estimation method for Gaussian Splatting method based on Bayesian inference framework and multi-scale representation. 
 
