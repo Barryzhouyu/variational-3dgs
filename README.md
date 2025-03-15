@@ -60,7 +60,7 @@ We test our code on ubuntu system, please refer to original 3DGS repo about the 
 
 ### Preparing Dataset
 
-The LF dataset and LLFF dataset files is provided here: [LF dataset](https://drive.google.com/file/d/1RrfrMN5wSaishYJu5vYiTy6gUPZfLaDM/view?usp=sharing), [LLFF dataset](https://drive.google.com/file/d/1kDclWpEpUPm9Nw0tGoQTLWz3L4g5Hu2L/view?usp=sharing). 
+The LF dataset and LLFF dataset files are provided here: [LF dataset](https://drive.google.com/file/d/1RrfrMN5wSaishYJu5vYiTy6gUPZfLaDM/view?usp=sharing), [LLFF dataset](https://drive.google.com/file/d/1kDclWpEpUPm9Nw0tGoQTLWz3L4g5Hu2L/view?usp=sharing). 
 
 Please unzip and put them under the a dataset folder: 
 
@@ -70,7 +70,7 @@ variational-gs
 ├──dataset
 │   │  
 │   ├──── LF
-│   └──── LLFF
+│   └──── nerf_llff_data
 ```
 
 ### Running
