@@ -112,7 +112,8 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
             assert False, "Colmap camera model not handled: only undistorted datasets (PINHOLE or SIMPLE_PINHOLE cameras) supported!"
 
         image_path = os.path.join(images_folder, os.path.basename(extr.name))
-        image_name = os.path.basename(image_path).split(".")[0]
+        #image_name = os.path.basename(image_path).split(".")[0]
+        image_name = extr.name
         image = Image.open(image_path)
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
@@ -147,6 +148,7 @@ def storePly(path, xyz, rgb):
     ply_data.write(path)
 
 def readColmapSceneInfo(path, images, eval, llffhold=8):
+
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -161,13 +163,11 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
     reading_dir = "images" if images == None else images
     cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, reading_dir))
     cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
+    i_train = list(range(len(cam_infos)))
+    i_val = []
+    train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx in i_train]
+    test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx in i_val]
 
-    if eval:
-        train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
-        test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
-    else:
-        train_cam_infos = cam_infos
-        test_cam_infos = []
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
@@ -205,38 +205,47 @@ def readLFSceneInfo(path, images, eval, llffhold=8):
     cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, reading_dir))
     cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
 
-    #train/test split from CF-NeRF https://github.com/poetrywanderer/CFNeRF/blob/66918a9748c137e1c0242c12be7aa6efa39ece06/run_nerf_uncertainty_NF.py#L750
-    if scene_name == 'basket':
-        i_train = list(np.arange(43,50,2))
-        i_val = list(np.arange(42,50,2))
-        depth_scale = 1 / 8
-
-    elif scene_name == 'africa':
-        i_train = list(np.arange(5,14,2))
-        i_val = list(np.arange(6,14,2))
-        depth_scale = 4
-
-    elif scene_name == 'statue':
-        i_train = list(np.arange(67,76,2))
-        i_val = list(np.arange(68,76,2))
-        depth_scale = 1.25
-
-    elif scene_name == 'torch':
-        i_train = list(np.arange(8,17,2))
-        i_val = list(np.arange(9,17,2))
-        depth_scale = 15
-
-    if eval:
-        train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx in i_train]
-        test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx in i_val]
+    split_file = os.path.join(path, "train_test_split.json")
+    if os.path.exists(split_file):
+        with open(split_file, "r") as f:
+            split = json.load(f)
+        train_files = set(split['train_files'])
+        test_files = set(split['test_files'])
+        i_train = [idx for idx, cam in enumerate(cam_infos) if os.path.basename(cam.image_path) in train_files]
+        i_val = [idx for idx, cam in enumerate(cam_infos) if os.path.basename(cam.image_path) in test_files]
+        depth_scale = 1.0
+        print(f"Loaded custom split: {len(i_train)} train, {len(i_val)} test images.")
     else:
-        train_cam_infos = cam_infos
-        test_cam_infos = []
+        # original hardcoded logic
+        if scene_name == 'basket':
+            i_train = list(np.arange(43,50,2))
+            i_val = list(np.arange(42,50,2))
+            depth_scale = 1 / 8
+        elif scene_name == 'africa':
+            i_train = list(np.arange(5,14,2))
+            i_val = list(np.arange(6,14,2))
+            depth_scale = 4
+        elif scene_name == 'statue':
+            i_train = list(np.arange(67,76,2))
+            i_val = list(np.arange(68,76,2))
+            depth_scale = 1.25
+        elif scene_name == 'torch':
+            i_train = list(np.arange(8,17,2))
+            i_val = list(np.arange(9,17,2))
+            depth_scale = 15
+        else:
+            i_train = list(range(len(cam_infos)))
+            i_val = []
+            depth_scale = 1.0
+
+    train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx in i_train]
+    test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx in i_val]
+
 
     all_depth = []
     depth_files = glob(os.path.join(path, f'depth_*.npy'))
     depth_files = sorted(depth_files)
-    for i in range(4): 
+    for i in range(min(4, len(depth_files), len(test_cam_infos))): 
         depth = np.ascontiguousarray(np.load(depth_files[i]))
         depth = TF.to_tensor(depth).cuda()
         test_cam_infos[i].depth = depth
@@ -264,6 +273,7 @@ def readLFSceneInfo(path, images, eval, llffhold=8):
                            nerf_normalization=nerf_normalization,
                            ply_path=ply_path,
                            depth_scale=depth_scale)
+    print("DEBUG: train cams", len(train_cam_infos), "test cams", len(test_cam_infos))
     return scene_info
 
 

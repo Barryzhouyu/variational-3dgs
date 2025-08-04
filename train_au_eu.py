@@ -15,7 +15,11 @@ from random import randint
 from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render, network_gui
 import sys
-from scene import Scene, GaussianModel
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from scene.gaussian_model_au import GaussianModelAU
+from scene import Scene
+
 from utils.general_utils import safe_state
 import uuid
 from tqdm import tqdm
@@ -31,12 +35,13 @@ if False:
 else: 
     TENSORBOARD_FOUND = False
 
+
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     opt.position_lr_max_steps = opt.iterations
 
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
-    gaussians = GaussianModel(dataset)
+    gaussians = GaussianModelAU(dataset)
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)
 
@@ -54,6 +59,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
+
+    log_sigma_au = torch.nn.Parameter(torch.tensor(0.0, dtype=torch.float32, device='cuda'))
+    gaussians.optimizer.add_param_group({'params': [log_sigma_au], 'lr': opt.opacity_lr, 'name': 'log_sigma_au'})
+
 
     for iteration in range(first_iter, opt.iterations + 1):      
         if network_gui.conn == None:
@@ -92,8 +101,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
+        # Ll1 = l1_loss(image, gt_image)
+        # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         Ll1 = l1_loss(image, gt_image)
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+        sigma_au = torch.exp(log_sigma_au)
+        nll_per_pixel = ((gt_image - image) ** 2) / (2 * sigma_au ** 2) + log_sigma_au
+        nll_loss = nll_per_pixel.mean()  # Mean over all pixels/channels
+
+        loss = nll_loss + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
 
         loss_kl_scal = gaussians.compute_kl_uniform_scal()
         loss_kl_xyz = gaussians.compute_kl_xyz()
@@ -109,7 +124,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
 
         loss.backward()
-
+        #print(f"[DEBUG] ∇log_sigma_au = {log_sigma_au.grad}")
         iter_end.record()
 
         with torch.no_grad():
@@ -118,8 +133,25 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if iteration % 10 == 0:
                 progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}"})
                 progress_bar.update(10)
+
+            if iteration % 1000 == 0:
+                log_val = log_sigma_au.item()
+                sigma_val = torch.exp(log_sigma_au).item()
+                print(f"[Iter {iteration}] log_sigma_au: {log_val:.6f}, sigma_au: {sigma_val:.6f}")
+
             if iteration == opt.iterations:
                 progress_bar.close()
+                # === Print final aleatoric uncertainty ===
+                final_log_sigma_au = log_sigma_au.item()
+                final_sigma_au = torch.exp(log_sigma_au).item()
+
+                print(f"\n=== Final log_sigma_au: {final_log_sigma_au:.6f}")
+                print(f"=== Final sigma_au (exp(log_sigma_au)): {final_sigma_au:.6f}")
+
+                with open(os.path.join(scene.model_path, "final_aleatoric_uncertainty.txt"), "w") as f:
+                    f.write(f"log_sigma_au: {final_log_sigma_au:.6f}\n")
+                    f.write(f"sigma_au: {final_sigma_au:.6f}\n")
+                    print(f"Aleatoric uncertainty saved to {scene.model_path}/final_aleatoric_uncertainty.txt")
 
             spawn_interval = dataset.spawn_interval
 

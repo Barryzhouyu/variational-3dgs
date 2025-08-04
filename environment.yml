@@ -4,12 +4,14 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - cudatoolkit=11.6
+  - python=3.10         # Explicit Python version
+  - pip                 # Add pip as a Conda-managed dependency
+  - cudatoolkit=11.6    # CUDA 11.6 for compatibility
   - plyfile
-  - pytorch=1.12.1
+  - pytorch=1.12.1      # PyTorch with CUDA 11.6
   - torchaudio=0.12.1
   - torchvision=0.13.1
   - tqdm
   - pip:
-    - submodules/depth-diff-gaussian-rasterization
-    - submodules/simple-knn
+    - -e submodules/depth-diff-gaussian-rasterization  # Use `-e` for editable installs
+    - -e submodules/simple-knn

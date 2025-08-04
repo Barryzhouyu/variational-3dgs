@@ -21,7 +21,7 @@ from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
 
-class GaussianModel: 
+class GaussianModelAU: 
     def setup_functions(self):
         def build_covariance_from_scaling_rotation(scaling, scaling_modifier, rotation):
             L = build_scaling_rotation(scaling_modifier * scaling, rotation)
@@ -504,20 +504,40 @@ class GaussianModel:
     def _prune_optimizer(self, mask):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
-            stored_state = self.optimizer.state.get(group['params'][0], None)
+            group_name = group.get("name", "unnamed")
+            param = group['params'][0]
+
+            # Skip pruning for scalar (0D) tensors like log_sigma_au
+            if param.dim() == 0:
+                optimizable_tensors[group_name] = param
+                continue
+
+            stored_state = self.optimizer.state.get(param, None)
             if stored_state is not None:
-                stored_state["exp_avg"] = stored_state["exp_avg"][mask]
-                stored_state["exp_avg_sq"] = stored_state["exp_avg_sq"][mask]
+                # Only prune state if dimensions are compatible
+                if "exp_avg" in stored_state and stored_state["exp_avg"].dim() > 0:
+                    stored_state["exp_avg"] = stored_state["exp_avg"][mask]
+                if "exp_avg_sq" in stored_state and stored_state["exp_avg_sq"].dim() > 0:
+                    stored_state["exp_avg_sq"] = stored_state["exp_avg_sq"][mask]
 
-                del self.optimizer.state[group['params'][0]]
-                group["params"][0] = nn.Parameter((group["params"][0][mask].requires_grad_(True)))
-                self.optimizer.state[group['params'][0]] = stored_state
+                # Remove old parameter from state
+                del self.optimizer.state[param]
 
-                optimizable_tensors[group["name"]] = group["params"][0]
+                # Prune the parameter
+                new_param = nn.Parameter(param[mask].requires_grad_(True))
+                group['params'][0] = new_param
+
+                # Re-initialize state for new param
+                self.optimizer.state[new_param] = stored_state
+                optimizable_tensors[group_name] = new_param
             else:
-                group["params"][0] = nn.Parameter(group["params"][0][mask].requires_grad_(True))
-                optimizable_tensors[group["name"]] = group["params"][0]
+                # Fallback if no state — just prune param
+                new_param = nn.Parameter(param[mask].requires_grad_(True))
+                group['params'][0] = new_param
+                optimizable_tensors[group_name] = new_param
+
         return optimizable_tensors
+
 
     def prune_points(self, mask):
         valid_points_mask = ~mask
@@ -543,7 +563,11 @@ class GaussianModel:
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
             assert len(group["params"]) == 1
-            extension_tensor = tensors_dict[group["name"]]
+            group_name = group.get("name", None)
+            if group_name not in tensors_dict:
+                continue  # skip unknown groups like 'log_sigma_au'
+            extension_tensor = tensors_dict[group_name]
+
             stored_state = self.optimizer.state.get(group['params'][0], None)
             if stored_state is not None:
 
